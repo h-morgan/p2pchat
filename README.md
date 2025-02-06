@@ -1,6 +1,14 @@
 # p2pchat
 
-Writing a peer 2 peer chat application, in rust
+A peer 2 peer chat application, using rust and iroh
+
+## Introduction
+
+From the [iroh](https://www.iroh.computer/) home page: 
+> Connect any two devices on the planet. 
+> Iroh gives you an API for dialing by public key. You  say “connect to that phone”, iroh will find & maintain the fastest connection for you, regardless of where it is.
+
+More detailed instructions in the example [here](https://www.iroh.computer/docs/examples/gossip-chat).
 
 ## Pre-setup setup
 
