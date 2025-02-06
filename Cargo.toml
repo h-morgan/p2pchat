@@ -1,0 +1,10 @@
+[package]
+name = "p2pchat"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.95"
+iroh = "0.32.1"
+rand = "0.9.0"
+tokio = "1.43.0"
