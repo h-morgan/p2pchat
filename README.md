@@ -40,3 +40,23 @@ To add dependencies:
 cargo add <packages>
 ```
 Note: these get added to the [Cargo.toml](https://github.com/h-morgan/p2pchat/blob/main/Cargo.toml) file.
+
+## Running the application
+
+To run the application/cli (after you've cloned this repo), run:
+```bash
+cargo run 
+```
+This will print out cli/usage docs
+
+For example, to open a chat room for a topic and print a ticket for others to join:
+```bash
+cargo run -- --name haley open
+```
+
+To join an existing chat room:
+```bash
+cargo run -- --name user2 join <ticket>
+```
+
+
