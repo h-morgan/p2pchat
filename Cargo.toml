@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.95"
-iroh = "0.31.0"
+iroh = "0.32.0"
+iroh-gossip = "0.32.0"
 rand = "0.8.5"
 tokio = "1.43.0"
