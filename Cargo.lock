@@ -2316,9 +2316,13 @@ name = "p2pchat"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "data-encoding",
+ "futures-lite",
  "iroh",
  "iroh-gossip",
  "rand",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
