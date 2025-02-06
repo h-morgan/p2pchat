@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.95"
+clap = { version = "4.5.28", features = ["derive"] }
 data-encoding = "2.7.0"
 futures-lite = "2.6.0"
 iroh = "0.32.0"

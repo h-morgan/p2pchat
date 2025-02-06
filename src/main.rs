@@ -1,20 +1,63 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt, str::FromStr};
 
 use anyhow::Result;
+use clap::Parser;
 use futures_lite::StreamExt;
-use iroh::protocol::Router;
-use iroh::{Endpoint, NodeId};
+use iroh::{protocol::Router, Endpoint, NodeAddr, NodeId};
 use iroh_gossip::{
     net::{Event, Gossip, GossipEvent, GossipReceiver},
     proto::TopicId,
 };
 use serde::{Deserialize, Serialize};
-use iroh::NodeAddr;
-use std::fmt;
-use std::str::FromStr;
+
+/// Chat over iroh-gossip
+///
+/// This broadcasts unsigned messages over iroh-gossip.
+///
+/// By default a new node id is created when starting the example.
+///
+/// By default, we use the default n0 discovery services to dial by `NodeId`.
+#[derive(Parser, Debug)]
+struct Args {
+    /// Set your nickname.
+    #[clap(short, long)]
+    name: Option<String>,
+    /// Set the bind port for our socket. By default, a random port will be used.
+    #[clap(short, long, default_value = "0")]
+    bind_port: u16,
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Parser, Debug)]
+enum Command {
+    /// Open a chat room for a topic and print a ticket for others to join.
+    Open,
+    /// Join a chat room from a ticket.
+    Join {
+        /// The ticket, as base32 string.
+        ticket: String,
+    },
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+
+    // parse the cli command
+    let (topic, nodes) = match &args.command {
+        Command::Open => {
+            let topic = TopicId::from_bytes(rand::random());
+            println!("> opening chat room for topic {topic}");
+            (topic, vec![])
+        }
+        Command::Join { ticket } => {
+            let Ticket { topic, nodes } = Ticket::from_str(ticket)?;
+            println!("> joining chat room for topic {topic}");
+            (topic, nodes)
+        }
+    };
+
     let endpoint = Endpoint::builder().discovery_n0().bind().await?;
 
     println!("> our node id: {}", endpoint.node_id());
@@ -25,11 +68,7 @@ async fn main() -> Result<()> {
         .spawn()
         .await?;
 
-    let id = TopicId::from_bytes(rand::random());
-    let node_ids = vec![];
-
-    let (sender, receiver) = gossip.subscribe(id, node_ids)?.split();
-
+    // in our main file, after we create a topic `id`:
     // print a ticket that includes our own node id and endpoint addresses
     let ticket = {
         // Get our address information, includes our
@@ -37,15 +76,32 @@ async fn main() -> Result<()> {
         // addresses.
         let me = endpoint.node_addr().await?;
         let nodes = vec![me];
-        Ticket { topic: id, nodes }
+        Ticket { topic, nodes }
     };
     println!("> ticket to join us: {ticket}");
 
-    let message = Message::AboutMe {
-        from: endpoint.node_id(),
-        name: String::from("alice"),
+    // join the gossip topic by connecting to known nodes, if any
+    let node_ids = nodes.iter().map(|p| p.node_id).collect();
+    if nodes.is_empty() {
+        println!("> waiting for nodes to join us...");
+    } else {
+        println!("> trying to connect to {} nodes...", nodes.len());
+        // add the peer addrs from the ticket to our endpoint's addressbook so that they can be dialed
+        for node in nodes.into_iter() {
+            endpoint.add_node_addr(node)?;
+        }
     };
-    sender.broadcast(message.to_vec().into()).await?;
+    let (sender, receiver) = gossip.subscribe_and_join(topic, node_ids).await?.split();
+    println!("> connected!");
+
+    // broadcast our name, if set
+    if let Some(name) = args.name {
+        let message = Message::AboutMe {
+            from: endpoint.node_id(),
+            name,
+        };
+        sender.broadcast(message.to_vec().into()).await?;
+    }
 
     // subscribe and print loop
     tokio::spawn(subscribe_loop(receiver));
@@ -70,13 +126,11 @@ async fn main() -> Result<()> {
         // print to ourselves the text that we sent
         println!("> sent: {text}");
     }
-
     router.shutdown().await?;
 
     Ok(())
 }
 
-// add the message code to the bottom
 #[derive(Debug, Serialize, Deserialize)]
 enum Message {
     AboutMe { from: NodeId, name: String },
@@ -93,7 +147,7 @@ impl Message {
     }
 }
 
-/// Handle incoming events
+// Handle incoming events
 async fn subscribe_loop(mut receiver: GossipReceiver) -> Result<()> {
     // keep track of the mapping between `NodeId`s and names
     let mut names = HashMap::new();
@@ -126,23 +180,17 @@ async fn subscribe_loop(mut receiver: GossipReceiver) -> Result<()> {
     Ok(())
 }
 
-/// Read input from stdin
 fn input_loop(line_tx: tokio::sync::mpsc::Sender<String>) -> Result<()> {
-    // create a new string buffer
     let mut buffer = String::new();
-    // get a handle on `Stdin`
     let stdin = std::io::stdin(); // We get `Stdin` here.
     loop {
-        // loop through reading from the buffer...
         stdin.read_line(&mut buffer)?;
-        // and then sending over the channel
         line_tx.blocking_send(buffer.clone())?;
-        // clear the buffer after we've sent the content
         buffer.clear();
     }
 }
 
-// Ticket code
+// add the `Ticket` code to the bottom of the main file
 #[derive(Debug, Serialize, Deserialize)]
 struct Ticket {
     topic: TopicId,
